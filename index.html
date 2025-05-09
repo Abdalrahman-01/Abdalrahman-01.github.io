@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إدارة اشتراكات العائلة</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .container { max-width: 800px; }
+        .hidden { display: none; }
+        table { margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <!-- شاشة الدخول -->
+        <div id="loginScreen">
+            <h1 class="text-center mb-4">مرحبًا بكم في نظام الإدارة العائلية</h1>
+            <div class="card">
+                <div class="card-body">
+                    <button onclick="showMemberView()" class="btn btn-primary w-100 mb-3">استعلام فرد</button>
+                    <button onclick="showAdminLogin()" class="btn btn-secondary w-100">الدخول كمدير</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- استعلام الفرد -->
+        <div id="memberView" class="hidden">
+            <h2 class="text-center mb-4">استعلام عن الدفعات</h2>
+            <div class="input-group mb-3">
+                <input type="text" id="memberName" class="form-control" placeholder="أدخل اسمك">
+                <button class="btn btn-primary" onclick="searchMember()">بحث</button>
+            </div>
+            <div id="memberResults"></div>
+            <button class="btn btn-secondary" onclick="showLoginScreen()">رجوع</button>
+        </div>
+
+        <!-- دخول المدير -->
+        <div id="adminLogin" class="hidden">
+            <h2 class="text-center mb-4">تسجيل دخول المدير</h2>
+            <div class="mb-3">
+                <input type="password" id="adminPass" class="form-control" placeholder="كلمة المرور">
+            </div>
+            <button class="btn btn-primary" onclick="loginAdmin()">دخول</button>
+            <button class="btn btn-secondary" onclick="showLoginScreen()">رجوع</button>
+        </div>
+
+        <!-- لوحة التحكم -->
+        <div id="adminPanel" class="hidden">
+            <h2 class="text-center mb-4">لوحة التحكم</h2>
+            
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h4>إضافة عضو جديد</h4>
+                    <div class="input-group mb-3">
+                        <input type="text" id="newMemberName" class="form-control" placeholder="اسم العضو الجديد">
+                        <button class="btn btn-success" onclick="addMember()">إضافة</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h4>تسجيل دفعة</h4>
+                    <select id="paymentMember" class="form-select mb-3"></select>
+                    <input type="month" id="paymentMonth" class="form-control mb-3">
+                    <button class="btn btn-success" onclick="recordPayment()">تسجيل الدفعة</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body">
+                    <h4>جميع الأعضاء</h4>
+                    <div id="allMembersList"></div>
+                </div>
+            </div>
+
+            <button class="btn btn-danger mt-3" onclick="showLoginScreen()">خروج</button>
+        </div>
+    </div>
+
+    <script>
+        // تهيئة التخزين إذا لم يكن موجودًا
+        if (!localStorage.getItem('familyMembers')) {
+            const defaultMembers = [
+                { name: 'الأب', payments: [] },
+                { name: 'الابن الأول', payments: [] },
+                { name: 'الابن الثاني', payments: [] }
+            ];
+            localStorage.setItem('familyMembers', JSON.stringify(defaultMembers));
+        }
+
+        if (!localStorage.getItem('adminPassword')) {
+            localStorage.setItem('adminPassword', 'admin123'); // كلمة مرور افتراضية
+        }
+
+        // عناصر واجهة المستخدم
+        const views = {
+            login: document.getElementById('loginScreen'),
+            member: document.getElementById('memberView'),
+            adminLogin: document.getElementById('adminLogin'),
+            adminPanel: document.getElementById('adminPanel')
+        };
+
+        // وظائف التنقل
+        function showLoginScreen() {
+            Object.values(views).forEach(view => view.classList.add('hidden'));
+            views.login.classList.remove('hidden');
+        }
+
+        function showMemberView() {
+            Object.values(views).forEach(view => view.classList.add('hidden'));
+            views.member.classList.remove('hidden');
+        }
+
+        function showAdminLogin() {
+            Object.values(views).forEach(view => view.classList.add('hidden'));
+            views.adminLogin.classList.remove('hidden');
+        }
+
+        // وظائف العضو
+        function searchMember() {
+            const name = document.getElementById('memberName').value;
+            const members = JSON.parse(localStorage.getItem('familyMembers'));
+            const member = members.find(m => m.name === name);
+            
+            if (!member) {
+                document.getElementById('memberResults').innerHTML = `
+                    <div class="alert alert-danger">العضو غير موجود</div>
+                `;
+                return;
+            }
+
+            const currentDate = new Date();
+            const currentYear = currentDate.getFullYear();
+            const currentMonth = currentDate.getMonth() + 1;
+
+            let output = `
+                <h4>الحالة المالية لـ ${name}</h4>
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>الشهر</th>
+                            <th>الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            for (let month = 1; month <= currentMonth; month++) {
+                const isPaid = member.payments.some(p => 
+                    p.year === currentYear && p.month === month
+                );
+                
+                output += `
+                    <tr>
+                        <td>${month}/${currentYear}</td>
+                        <td class="${isPaid ? 'text-success' : 'text-danger'}">
+                            ${isPaid ? 'مدفوع' : 'غير مدفوع'}
+                        </td>
+                    </tr>
+                `;
+            }
+
+            output += '</tbody></table>';
+            document.getElementById('memberResults').innerHTML = output;
+        }
+
+        // وظائف المدير
+        function loginAdmin() {
+            const password = document.getElementById('adminPass').value;
+            if (password === localStorage.getItem('adminPassword')) {
+                Object.values(views).forEach(view => view.classList.add('hidden'));
+                views.adminPanel.classList.remove('hidden');
+                loadAdminPanel();
+            } else {
+                alert('كلمة المرور غير صحيحة');
+            }
+        }
+
+        function loadAdminPanel() {
+            // تحديث قائمة الأعضاء
+            const members = JSON.parse(localStorage.getItem('familyMembers'));
+            const memberSelect = document.getElementById('paymentMember');
+            memberSelect.innerHTML = members.map(m => 
+                `<option value="${m.name}">${m.name}</option>`
+            ).join('');
+
+            // عرض جميع الأعضاء
+            document.getElementById('allMembersList').innerHTML = members.map(m => `
+                <div class="card mb-2">
+                    <div class="card-body">
+                        <h5>${m.name}</h5>
+                        <p>عدد الدفعات: ${m.payments.length}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function addMember() {
+            const name = document.getElementById('newMemberName').value;
+            const members = JSON.parse(localStorage.getItem('familyMembers'));
+            
+            if (members.some(m => m.name === name)) {
+                alert('العضو موجود مسبقًا!');
+                return;
+            }
+
+            members.push({ name, payments: [] });
+            localStorage.setItem('familyMembers', JSON.stringify(members));
+            loadAdminPanel();
+            document.getElementById('newMemberName').value = '';
+        }
+
+        function recordPayment() {
+            const memberName = document.getElementById('paymentMember').value;
+            const [year, month] = document.getElementById('paymentMonth').value.split('-');
+            
+            const members = JSON.parse(localStorage.getItem('familyMembers'));
+            const member = members.find(m => m.name === memberName);
+            
+            member.payments.push({ 
+                month: parseInt(month), 
+                year: parseInt(year) 
+            });
+            
+            localStorage.setItem('familyMembers', JSON.stringify(members));
+            loadAdminPanel();
+        }
+    </script>
+</body>
+</html>
